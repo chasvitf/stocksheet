@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --green: #188038; --ink: #202124; --mute: #5f6368; --line: #dadce0; --soft: #e6f4ea; --red: #c5221f; }
+    * { box-sizing: border-box; }
+    body { font-family: Sarabun, Arial, sans-serif; color: var(--ink); margin: 0; padding: 4px 4px 12px; font-size: 14px; }
+    fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px 12px; margin: 0 0 12px; }
+    legend { font-weight: 600; padding: 0 6px; }
+    label { display: block; margin: 10px 0 4px; color: var(--mute); }
+    input { width: 100%; font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; }
+    input:focus { outline: 2px solid var(--green); border-color: transparent; }
+    .set { color: var(--green); font-size: 12px; margin-left: 6px; }
+    .set button { font: inherit; font-size: 12px; color: var(--red); background: none; border: 0; cursor: pointer; padding: 0 0 0 6px; }
+    .hint { color: var(--mute); font-size: 12px; margin-top: 4px; }
+    .bar { display: flex; gap: 8px; margin-top: 4px; }
+    .bar button { flex: 1; font: 600 14px Sarabun, Arial, sans-serif; border-radius: 6px; padding: 9px; cursor: pointer; }
+    .save { color: #fff; background: var(--green); border: 0; }
+    .test { color: var(--green); background: #fff; border: 1px solid var(--green); }
+    button:disabled { opacity: .55; cursor: default; }
+    .msg { margin-top: 10px; padding: 9px 10px; border-radius: 6px; white-space: pre-line; display: none; }
+    .msg.ok { display: block; background: var(--soft); color: var(--green); }
+    .msg.err { display: block; background: #fce8e6; color: var(--red); }
+  </style>
+</head>
+<body>
+  <form id="f" autocomplete="off">
+    <fieldset>
+      <legend>ทั่วไป</legend>
+      <label for="shopName">ชื่อร้าน (ใช้ในข้อความแจ้งเตือน)</label>
+      <input id="shopName" maxlength="60">
+      <label for="reportHour">เวลาส่งสรุปประจำวัน (ชั่วโมง 0-23)</label>
+      <input id="reportHour" type="number" min="0" max="23" step="1">
+      <div class="hint" id="daily"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Telegram</legend>
+      <label for="telegramToken">Bot token <span class="set" id="telegramSet"></span></label>
+      <input id="telegramToken" type="password" placeholder="123456:ABC-...">
+      <label for="telegramChatId">Chat ID</label>
+      <input id="telegramChatId" placeholder="เช่น 123456789 หรือ -100...">
+    </fieldset>
+
+    <fieldset>
+      <legend>LINE (Messaging API)</legend>
+      <label for="lineToken">Channel access token <span class="set" id="lineSet"></span></label>
+      <input id="lineToken" type="password">
+      <label for="lineTo">User ID หรือ Group ID ที่จะรับข้อความ</label>
+      <input id="lineTo" placeholder="U... หรือ C...">
+    </fieldset>
+
+    <fieldset>
+      <legend>อีเมล</legend>
+      <label for="email">ส่งสรุปไปที่อีเมล</label>
+      <input id="email" type="email" placeholder="you@example.com">
+    </fieldset>
+
+    <div class="hint">token ถูกเก็บใน Document Properties ของไฟล์นี้ ไม่แสดงในชีต และไม่ติดไปกับไฟล์ที่ทำสำเนา เว้นช่องว่างไว้ = ใช้ค่าเดิม</div>
+    <div class="bar">
+      <button class="save" id="save" type="submit">บันทึก</button>
+      <button class="test" id="test" type="button">ทดสอบส่ง</button>
+    </div>
+  </form>
+  <div class="msg" id="msg"></div>
+
+  <script>
+    var $ = function (id) { return document.getElementById(id); };
+    var fields = ['shopName', 'reportHour', 'email', 'telegramChatId', 'lineTo'];
+
+    function fill(s) {
+      fields.forEach(function (k) { $(k).value = s[k] || ''; });
+      $('telegramToken').value = '';
+      $('lineToken').value = '';
+      setBadge('telegramSet', 'telegramToken', s.telegramSet);
+      setBadge('lineSet', 'lineToken', s.lineSet);
+      $('daily').textContent = s.dailyOn ? 'สรุปอัตโนมัติ: เปิดอยู่' : 'สรุปอัตโนมัติ: ปิดอยู่ (เปิดได้ที่เมนู ⏰)';
+    }
+
+    function setBadge(id, key, isSet) {
+      $(id).innerHTML = isSet ? '✓ ตั้งค่าแล้ว<button type="button" data-key="' + key + '">ลบ</button>' : '';
+    }
+
+    function show(kind, text) {
+      $('msg').className = 'msg ' + kind;
+      $('msg').textContent = text;
+    }
+
+    function busy(on) {
+      $('save').disabled = on;
+      $('test').disabled = on;
+    }
+
+    function fail(err) {
+      busy(false);
+      show('err', (err.message || String(err)).replace(/^Error:\s*/, ''));
+    }
+
+    document.addEventListener('click', function (e) {
+      var key = e.target.dataset && e.target.dataset.key;
+      if (!key) return;
+      busy(true);
+      google.script.run.withSuccessHandler(function (s) { busy(false); fill(s); show('ok', 'ลบแล้ว'); })
+        .withFailureHandler(fail).clearSecret(key);
+    });
+
+    $('f').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var form = {};
+      fields.concat(['telegramToken', 'lineToken']).forEach(function (k) { form[k] = $(k).value; });
+      busy(true);
+      google.script.run.withSuccessHandler(function (s) { busy(false); fill(s); show('ok', 'บันทึกแล้ว'); })
+        .withFailureHandler(fail).saveSettings(form);
+    });
+
+    $('test').addEventListener('click', function () {
+      busy(true);
+      show('ok', 'กำลังส่ง…');
+      google.script.run.withSuccessHandler(function (text) { busy(false); show(/❌/.test(text) ? 'err' : 'ok', text); })
+        .withFailureHandler(fail).sendTestMessage();
+    });
+
+    google.script.run.withSuccessHandler(fill).withFailureHandler(fail).settingsForForm();
+  </script>
+</body>
+</html>

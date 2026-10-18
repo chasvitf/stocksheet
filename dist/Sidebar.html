@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --green: #188038; --ink: #202124; --mute: #5f6368; --line: #dadce0; --soft: #e6f4ea; --red: #c5221f; --amber: #b06000; }
+    * { box-sizing: border-box; }
+    body { font-family: Sarabun, Arial, sans-serif; color: var(--ink); margin: 0; padding: 14px 16px 24px; font-size: 14px; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    label { display: block; font-weight: 600; margin: 14px 0 6px; }
+    input, select, textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); border-color: transparent; }
+    .types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .types label { margin: 0; }
+    .types input { display: none; }
+    .types span { display: block; text-align: center; padding: 8px 0; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .types input:checked + span { background: var(--green); border-color: var(--green); color: #fff; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .info { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: var(--soft); color: var(--ink); display: none; }
+    .info.low { background: #fef7e0; color: var(--amber); }
+    .info.out { background: #fce8e6; color: var(--red); }
+    .total { margin-top: 12px; color: var(--mute); }
+    .total b { color: var(--ink); font-size: 16px; }
+    button { width: 100%; margin-top: 16px; font: 600 15px Sarabun, Arial, sans-serif; color: #fff; background: var(--green); border: 0; border-radius: 6px; padding: 10px; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: default; }
+    .msg { margin-top: 12px; padding: 10px; border-radius: 6px; white-space: pre-line; display: none; }
+    .msg.ok { display: block; background: var(--soft); color: var(--green); }
+    .msg.err { display: block; background: #fce8e6; color: var(--red); }
+    .hint { color: var(--mute); font-size: 12px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>บันทึกรับเข้า / ขาย</h1>
+  <form id="f" autocomplete="off">
+    <div class="types">
+      <label><input type="radio" name="type" value="ขาย" checked><span>ขาย</span></label>
+      <label><input type="radio" name="type" value="รับเข้า"><span>รับเข้า</span></label>
+      <label><input type="radio" name="type" value="ปรับยอด"><span>ปรับยอด</span></label>
+    </div>
+
+    <label for="code">สินค้า</label>
+    <input id="code" list="products" placeholder="พิมพ์ชื่อหรือรหัส…" required>
+    <datalist id="products"></datalist>
+    <div class="info" id="info"></div>
+
+    <div class="row">
+      <div><label for="qty">จำนวน</label><input id="qty" type="number" step="1" value="1" required></div>
+      <div><label for="price">ราคาต่อหน่วย</label><input id="price" type="number" step="0.01" min="0" required></div>
+    </div>
+    <div class="hint" id="qtyHint">ปรับยอดลด (เช่น ของชำรุด) ใส่จำนวนติดลบ</div>
+    <div class="total">ยอดเงิน <b id="total">0</b> บาท</div>
+
+    <label for="note">หมายเหตุ</label>
+    <input id="note" maxlength="200" placeholder="ไม่บังคับ">
+    <label for="by">ผู้บันทึก</label>
+    <input id="by" maxlength="40" placeholder="ชื่อเล่น">
+
+    <button id="save" type="submit" disabled>กำลังโหลดสินค้า…</button>
+  </form>
+  <div class="msg" id="msg"></div>
+
+  <script>
+    var products = [];
+    var byCode = {};
+    var $ = function (id) { return document.getElementById(id); };
+    var fmt = function (n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); };
+    var type = function () { return document.querySelector('input[name=type]:checked').value; };
+
+    function codeFromInput() {
+      var v = $('code').value.trim();
+      var m = v.match(/^([A-Za-z]{2}-\d{3})\b/);
+      return (m ? m[1] : v).toUpperCase();
+    }
+
+    function refresh() {
+      var p = byCode[codeFromInput()];
+      var info = $('info');
+      if (!p) { info.style.display = 'none'; updateTotal(); return; }
+      info.style.display = 'block';
+      info.className = 'info' + (p.stock <= 0 ? ' out' : p.stock <= p.reorder ? ' low' : '');
+      info.textContent = p.name + ' · คงเหลือ ' + fmt(p.stock) + ' ' + p.unit +
+        (p.stock <= 0 ? ' (หมด)' : p.stock <= p.reorder ? ' (ถึงจุดสั่งซื้อแล้ว)' : '');
+      if (!$('price').dataset.touched) $('price').value = type() === 'ขาย' ? p.price : p.cost;
+      updateTotal();
+    }
+
+    function updateTotal() {
+      $('total').textContent = fmt(Number($('qty').value) * Number($('price').value));
+      $('qtyHint').style.display = type() === 'ปรับยอด' ? 'block' : 'none';
+      $('qty').min = type() === 'ปรับยอด' ? '' : '1';
+    }
+
+    function load() {
+      google.script.run.withSuccessHandler(function (data) {
+        products = data.products;
+        byCode = {};
+        products.forEach(function (p) { byCode[p.code] = p; });
+        $('products').innerHTML = products.map(function (p) {
+          return '<option value="' + p.code + ' ' + p.name.replace(/"/g, '&quot;') + '">';
+        }).join('');
+        if (data.by && !$('by').value) $('by').value = data.by;
+        $('save').disabled = false;
+        $('save').textContent = 'บันทึก';
+        refresh();
+      }).withFailureHandler(showError).getFormData();
+    }
+
+    function showError(err) {
+      $('msg').className = 'msg err';
+      $('msg').textContent = (err.message || String(err)).replace(/^Error:\s*/, '');
+      $('save').disabled = false;
+      $('save').textContent = 'บันทึก';
+    }
+
+    $('f').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var form = { type: type(), code: codeFromInput(), qty: $('qty').value, price: $('price').value, note: $('note').value, by: $('by').value };
+      if (!byCode[form.code]) { showError({ message: 'กรุณาเลือกสินค้าจากรายการ' }); return; }
+      $('save').disabled = true;
+      $('save').textContent = 'กำลังบันทึก…';
+      $('msg').className = 'msg';
+      google.script.run.withSuccessHandler(function (r) {
+        $('msg').className = 'msg ok';
+        $('msg').textContent = '✅ บันทึกแล้ว (แถว ' + r.row + ')\n' + r.name + ' คงเหลือ ' + fmt(r.stock) + ' ' + r.unit +
+          (r.low ? '\n⚠️ ถึงจุดสั่งซื้อแล้ว' : '');
+        $('code').value = '';
+        $('qty').value = 1;
+        $('note').value = '';
+        delete $('price').dataset.touched;
+        $('price').value = '';
+        refresh();
+        load();
+      }).withFailureHandler(showError).addEntry(form);
+    });
+
+    $('code').addEventListener('input', function () { delete $('price').dataset.touched; refresh(); });
+    $('qty').addEventListener('input', updateTotal);
+    $('price').addEventListener('input', function () { $('price').dataset.touched = '1'; updateTotal(); });
+    document.querySelectorAll('input[name=type]').forEach(function (r) {
+      r.addEventListener('change', function () { delete $('price').dataset.touched; refresh(); });
+    });
+    load();
+  </script>
+</body>
+</html>

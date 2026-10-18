@@ -1,0 +1,11 @@
+{
+  "name": "stocksheet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Stock system on Google Sheets + Apps Script: entry form, dashboard, low-stock alerts to Telegram / LINE / email",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "bundle": "node tools/bundle.js"
+  },
+  "license": "MIT"
+}
