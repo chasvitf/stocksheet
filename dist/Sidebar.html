@@ -121,6 +121,7 @@
       $('save').textContent = 'กำลังบันทึก…';
       $('msg').className = 'msg';
       google.script.run.withSuccessHandler(function (r) {
+        if (!r.ok) { showError({ message: r.error }); return; }
         $('msg').className = 'msg ok';
         $('msg').textContent = '✅ บันทึกแล้ว (แถว ' + r.row + ')\n' + r.name + ' คงเหลือ ' + fmt(r.stock) + ' ' + r.unit +
           (r.low ? '\n⚠️ ถึงจุดสั่งซื้อแล้ว' : '');

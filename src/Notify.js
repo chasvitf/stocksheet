@@ -15,12 +15,12 @@ function getSettings() {
   return s;
 }
 
-/** Called from Settings.html. Empty secret fields keep the saved value. */
+/** Called from Settings.html. Empty secret fields keep the saved value. Invalid input comes back as {error}. */
 function saveSettings(form) {
   var props = PropertiesService.getDocumentProperties();
   var hour = Number(form.reportHour);
-  if (!(hour >= 0 && hour <= 23)) throw new Error('เวลาส่งสรุปต้องเป็นชั่วโมง 0-23');
-  if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) throw new Error('รูปแบบอีเมลไม่ถูกต้อง');
+  if (!(Math.round(hour) === hour && hour >= 0 && hour <= 23)) return { error: 'เวลาส่งสรุปต้องเป็นชั่วโมง 0-23' };
+  if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(form.email).trim())) return { error: 'รูปแบบอีเมลไม่ถูกต้อง' };
   SETTING_KEYS.forEach(function (k) {
     var v = String(form[k] || '').trim();
     var secret = k === 'telegramToken' || k === 'lineToken';

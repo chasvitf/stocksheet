@@ -111,8 +111,12 @@
       var form = {};
       fields.concat(['telegramToken', 'lineToken']).forEach(function (k) { form[k] = $(k).value; });
       busy(true);
-      google.script.run.withSuccessHandler(function (s) { busy(false); fill(s); show('ok', 'บันทึกแล้ว'); })
-        .withFailureHandler(fail).saveSettings(form);
+      google.script.run.withSuccessHandler(function (s) {
+        busy(false);
+        if (s.error) { show('err', s.error); return; }
+        fill(s);
+        show('ok', 'บันทึกแล้ว');
+      }).withFailureHandler(fail).saveSettings(form);
     });
 
     $('test').addEventListener('click', function () {

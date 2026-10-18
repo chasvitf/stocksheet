@@ -87,7 +87,11 @@ function getFormData() {
   };
 }
 
-/** Called from Sidebar.html. Validates against the current stock, then writes one row. */
+/**
+ * Called from Sidebar.html. Validates against the current stock, then writes
+ * one row. A rejected entry (e.g. not enough stock) is a normal answer, not an
+ * error, so it comes back as {ok: false} and the execution log stays clean.
+ */
 function addEntry(form) {
   var lock = LockService.getDocumentLock();
   lock.waitLock(15000);
@@ -96,7 +100,7 @@ function addEntry(form) {
       qty: Number(form.qty), price: Number(form.price) };
     var product = readProducts().filter(function (p) { return p.code === entry.code; })[0] || null;
     var errors = validateEntry(entry, product);
-    if (errors.length) throw new Error(errors.join('\n'));
+    if (errors.length) return { ok: false, error: errors.join('\n') };
 
     var by = String(form.by || '').trim().slice(0, 40);
     PropertiesService.getUserProperties().setProperty('recordedBy', by);
@@ -109,7 +113,7 @@ function addEntry(form) {
 
     var after = product.stock + stockChange(entry.type, entry.qty);
     var low = product.reorder > 0 && after <= product.reorder;
-    return { row: row, name: product.name, unit: product.unit, stock: after, low: low };
+    return { ok: true, row: row, name: product.name, unit: product.unit, stock: after, low: low };
   } finally {
     lock.releaseLock();
   }
@@ -452,12 +456,12 @@ function getSettings() {
   return s;
 }
 
-/** Called from Settings.html. Empty secret fields keep the saved value. */
+/** Called from Settings.html. Empty secret fields keep the saved value. Invalid input comes back as {error}. */
 function saveSettings(form) {
   var props = PropertiesService.getDocumentProperties();
   var hour = Number(form.reportHour);
-  if (!(hour >= 0 && hour <= 23)) throw new Error('เวลาส่งสรุปต้องเป็นชั่วโมง 0-23');
-  if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) throw new Error('รูปแบบอีเมลไม่ถูกต้อง');
+  if (!(Math.round(hour) === hour && hour >= 0 && hour <= 23)) return { error: 'เวลาส่งสรุปต้องเป็นชั่วโมง 0-23' };
+  if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(form.email).trim())) return { error: 'รูปแบบอีเมลไม่ถูกต้อง' };
   SETTING_KEYS.forEach(function (k) {
     var v = String(form[k] || '').trim();
     var secret = k === 'telegramToken' || k === 'lineToken';
